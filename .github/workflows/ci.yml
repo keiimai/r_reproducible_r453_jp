@@ -1,0 +1,124 @@
+# --- 運用者が手で走らせたときに GitHub が走らせる検査（WORKSPACE.md 4 節）---
+name: CI
+
+# --- 走るとき（手で走らせたときだけ。push と PR では走らない）（WORKSPACE.md 4 節）---
+on:
+  workflow_dispatch:
+    inputs:
+      docker:
+        description: "Docker イメージもビルドする（イメージの材料を変えたとき）"
+        type: boolean
+        default: false
+
+# --- 同じブランチの前の実行は止める（WORKSPACE.md 4 節）---
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# --- R の起動前に決まる値と、依存の取得元の日付（WORKSPACE.md 4 節）---
+env:
+  OMP_NUM_THREADS: "1"
+  OPENBLAS_NUM_THREADS: "1"
+  MKL_NUM_THREADS: "1"
+  LANG: "C.UTF-8"
+  LC_ALL: "C.UTF-8"
+  P3M_SNAPSHOT: "2026-04-01"
+
+# --- ジョブ（WORKSPACE.md 4 節）---
+jobs:
+  # --- テスト・コミット前の検査・記録層の経路を 1 つのジョブで（WORKSPACE.md 4 節）---
+  checks:
+    name: テスト・コミット前の検査・記録層の経路
+    runs-on: ubuntu-24.04
+    steps:
+      # --- リポジトリを取ってくる（WORKSPACE.md 4 節）---
+      - uses: actions/checkout@v7
+      # --- イメージと同じ版の R を入れる（WORKSPACE.md 4 節）---
+      - uses: r-lib/actions/setup-r@v2
+        id: setup-r
+        with:
+          r-version: "4.5.3"
+          use-public-rspm: false
+      # --- 検査に要る yaml と jsonlite だけを入れ、フックを全ファイルにかける（WORKSPACE.md 4 節）---
+      - name: コミット前の検査を全ファイルにかける
+        run: |
+          Rscript -e "source('docker/p3m_repo.R'); cat('[p3m]', use_p3m(Sys.getenv('P3M_SNAPSHOT')), '\n'); install.packages(c('yaml', 'jsonlite'), lib = Sys.getenv('R_LIBS_USER'))"
+          bash .githooks/pre-commit --all
+      # --- renv.lock が DESCRIPTION と食い違っていないか（make lock-check と同じ）（WORKSPACE.md 4 節）---
+      - name: renv.lock が DESCRIPTION と食い違っていないか
+        if: ${{ !cancelled() && steps.setup-r.outcome == 'success' }}
+        run: Rscript --vanilla tools/make_lockfile.R --check
+      # --- 依存を renv.lock から入れる（Docker イメージと同じ手順）（WORKSPACE.md 4 節）---
+      - name: 依存を renv.lock から入れる（Docker イメージと同じ手順）
+        id: deps
+        if: ${{ !cancelled() && steps.setup-r.outcome == 'success' }}
+        run: |
+          packages="$(sed -e 's/#.*//' docker/project_apt.txt | xargs)"
+          if [ -n "$packages" ]; then
+            sudo apt-get update
+            sudo apt-get install -y --no-install-recommends $packages
+          fi
+          Rscript -e "source('docker/p3m_repo.R'); cat('[p3m]', use_p3m(Sys.getenv('P3M_SNAPSHOT')), '\n'); install.packages('renv', lib = Sys.getenv('R_LIBS_USER')); renv::restore(lockfile = 'renv.lock', library = Sys.getenv('R_LIBS_USER'), prompt = FALSE)"
+      # --- lint（make lint と同じ）（WORKSPACE.md 4 節）---
+      - name: lint
+        if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: Rscript -e 'lints <- structure(c(lintr::lint_package(), lintr::lint_dir("tools"), lintr::lint_dir("docker"), lintr::lint_dir("notebooks")), class = "lints"); print(lints); if (length(lints) > 0) quit(status = 1)'
+      # --- 設定ファイルがすべて読めるか（WORKSPACE.md 4 節）---
+      - name: 設定ファイルがすべて読めるか
+        if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: |
+          Rscript -e '
+            for (path in list.files("R", pattern = "[.][Rr]$", full.names = TRUE)) source(path)
+            for (f in list.files("configs/experiment", pattern="[.]yaml$", recursive=TRUE, full.names=TRUE)) {
+              cfg <- repro_config_load(f); cat("ok:", f, "\n")
+            }'
+      # --- テスト（make test と同じ）（WORKSPACE.md 4 節）---
+      - name: テスト
+        if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: Rscript -e 'testthat::test_dir("tests/testthat", reporter = "summary", stop_on_failure = TRUE)'
+      # --- 記録層を 1 回通す（make smoke と同じ）（WORKSPACE.md 4 節）---
+      - name: 記録層を 1 回通す（疎通確認）
+        id: smoke
+        if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: Rscript -e 'source("R/repro.R"); repro_smoke()'
+      # --- 実行台帳を作り直して表示する（make runs と同じ）（WORKSPACE.md 4 節）---
+      - name: 実行台帳を作り直して表示する（記録が読めるか）
+        if: ${{ !cancelled() && steps.smoke.outcome == 'success' }}
+        run: Rscript -e 'source("R/repro.R"); repro_runs(show = TRUE)'
+      # --- 記録 JSON を 14 日残す（WORKSPACE.md 4 節）---
+      - name: 実行記録を保存する
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: repro-records
+          path: outputs/repro/
+          retention-days: 14
+
+  # --- Docker イメージのビルドと読み込み検査（docker を選んだときだけ）（WORKSPACE.md 4 節）---
+  docker:
+    name: Docker イメージがビルドでき、読み込みが通るか
+    if: ${{ inputs.docker }}
+    runs-on: ubuntu-24.04-arm
+    steps:
+      # --- リポジトリを取ってくる（WORKSPACE.md 4 節）---
+      - uses: actions/checkout@v7
+      # --- ビルドの道具（キャッシュを GitHub に残せる）（WORKSPACE.md 4 節）---
+      - uses: docker/setup-buildx-action@v4
+      # --- イメージの名前を docker-compose.yml の name: から読む（make build と同じ）（WORKSPACE.md 4 節）---
+      - name: イメージの名前を読む
+        id: name
+        run: |
+          echo "image=$(sed -n 's/^name: //p' docker-compose.yml)" >> "$GITHUB_OUTPUT"
+      # --- 共通ベースが無いときの make build と同じ段とビルド引数でビルドする（WORKSPACE.md 4 節）---
+      - name: ビルド（smoke_load.R がイメージ内で走る）
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          target: dev
+          push: false
+          build-args: |
+            BUILD_DATE=${{ github.event.repository.updated_at }}
+            VCS_REF=${{ github.sha }}
+            IMAGE_NAME=${{ steps.name.outputs.image }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

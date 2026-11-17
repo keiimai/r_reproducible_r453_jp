@@ -1,0 +1,18 @@
+Package: repro
+Type: Project
+Imports:
+    yaml (>= 2.3),
+    digest (>= 0.6),
+    jsonlite (>= 1.8)
+Suggests:
+    testthat (>= 3.2),
+    withr (>= 2.5),
+    lintr (>= 3.1),
+    RhpcBLASctl (>= 0.23),
+    knitr (>= 1.45),
+    rmarkdown (>= 2.25),
+    nanoparquet (>= 0.4),
+    stringi (>= 1.8),
+    stringr (>= 1.5),
+    tidyverse (>= 2.0)
+Config/testthat/edition: 3

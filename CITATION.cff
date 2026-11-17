@@ -1,0 +1,20 @@
+# --- 引用の情報（LAYERS.md「派生プロジェクトとの関係」）---
+
+cff-version: 1.2.0
+title: "R 4.5.3 解析環境"
+message: "この環境を使った成果を公表する際は、下記の情報で引用してください。"
+type: software
+authors:
+  - family-names: "Imai"
+    given-names: "Kei"
+    email: "keiimai1220@gmail.com"
+    affiliation: "The University of Tokyo, Japan"
+abstract: >-
+  再現可能な解析のための実行環境テンプレート（Docker と renv）。
+  提供するのは記録層だけで、実行ごとに run_id・読んだファイルのSHA-256・git のコミット・実行環境のスナップショット・解決済みの設定・全実行の台帳を残す。解析そのものはプロジェクトごとにこの層の上に書き、解析のコードは同梱しない。
+license: MIT
+version: 0.1.0
+date-released: "2026-11-17"
+keywords:
+  - reproducible research
+  - R

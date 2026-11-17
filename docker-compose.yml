@@ -1,0 +1,55 @@
+# --- 開発環境の起動（DOCKER.md 1 節）---
+
+# --- 名前。イメージとコンテナの名前もここから作る（DOCKER.md 3 節）---
+name: r453
+
+services:
+  dev:
+    # --- イメージとコンテナの名前（name: から作る。イメージは Docker Hub に取りに行かない）（DOCKER.md 3 節）---
+    image: ${COMPOSE_PROJECT_NAME}:dev
+    pull_policy: never
+    container_name: ${COMPOSE_PROJECT_NAME}_dev
+
+    # --- CPU の種類（既定は Apple Silicon の linux/arm64。.env の PLATFORM で変える）（DOCKER.md 1 節）---
+    platform: ${PLATFORM:-linux/arm64}
+
+    # --- プロジェクトごとのネットワークを作らず、Docker の既定の bridge につなぐ（DOCKER.md 3 節）---
+    network_mode: bridge
+
+    # --- リポジトリ本体（DOCKER.md 2 節）---
+    volumes:
+      - .:/app
+
+    # --- ホスト側の番号は Docker が選ぶ（DOCKER.md 3 節）---
+    ports:
+      - "127.0.0.1:8787-8886:8787"
+
+    # --- 環境変数（DOCKER.md 3 節）---
+    environment:
+      - DISABLE_AUTH=true
+
+      - OMP_NUM_THREADS=${OMP_NUM_THREADS:-1}
+      - OPENBLAS_NUM_THREADS=${OPENBLAS_NUM_THREADS:-1}
+      - MKL_NUM_THREADS=${MKL_NUM_THREADS:-1}
+
+      # --- コンテナの時刻帯（.env の CONTAINER_TZ で変える。既定は Asia/Tokyo）（DOCKER.md 3 節）---
+      - TZ=${CONTAINER_TZ:-Asia/Tokyo}
+
+    # --- プロジェクトが足す環境変数（第4〜5層の余白。上の environment: の名前は上書きできない）（DOCKER.md 3 節）---
+    env_file: docker/project_env.txt
+
+  # --- make のコンテナの target・make shell・コミット前のフックの入口（中身は dev と同じで、Dev Container がつながらない）（DOCKER.md 3 節）---
+  task:
+    extends:
+      service: dev
+    profiles: ["tools"]
+    container_name: ${COMPOSE_PROJECT_NAME}_task
+
+  # --- renv.lock を作り直すための入口（make lock）（DOCKER.md 2 節）---
+  lock:
+    profiles: ["tools"]
+    image: ${COMPOSE_PROJECT_NAME}:bootstrap
+    platform: ${PLATFORM:-linux/arm64}
+    network_mode: bridge
+    volumes:
+      - .:/app

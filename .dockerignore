@@ -1,0 +1,10 @@
+# --- イメージに入れるのは、ビルドに要るものだけ（DOCKER.md 1 節）---
+*
+!DESCRIPTION
+!renv.lock
+!R/*.[Rr]
+!docker/*.R
+!docker/project_apt.txt
+!docker/project_build.sh
+
+# --- プロジェクトが足す行（第4〜5層の余白）（LAYERS.md「第4〜5層の『余白』」）---

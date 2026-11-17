@@ -1,0 +1,35 @@
+// --- VS Code から compose の dev をそのまま使う（DOCKER.md 3 節）---
+{
+  "name": "${localWorkspaceFolderBasename}（R 4.5.3）",
+  "dockerComposeFile": ["../docker-compose.yml"],
+  "service": "dev",
+  "workspaceFolder": "/app",
+  "overrideCommand": true,
+  "customizations": {
+    "vscode": {
+      // --- コンテナの中の VS Code に入れる拡張機能（DOCKER.md 3 節）---
+      "extensions": [
+        "REditorSupport.r",
+        "quarto.quarto",
+        "redhat.vscode-yaml",
+        "EditorConfig.EditorConfig"
+      ],
+      "settings": {
+        // --- 複数行のコードは、まとめて R の端末へ送る（DOCKER.md 3 節）---
+        "r.bracketedPaste": true,
+        // --- 言語サーバーとセッションの連携は使わない（要るパッケージがイメージに無い）（DOCKER.md 3 節）---
+        "r.lsp.enabled": false,
+        "r.sessionWatcher": false,
+        // --- YAML の拡張機能は、使い方のデータを送らない（DOCKER.md 3 節）---
+        "redhat.telemetry.enabled": false,
+        // --- コンテナの中では VS Code の git を使わない（DOCKER.md 3 節）---
+        "git.enabled": false,
+        // --- 検索から外す、追跡しているが量の多いもの（DOCKER.md 3 節）---
+        "search.exclude": {
+          "renv.lock": true
+        }
+      }
+    }
+  },
+  "remoteUser": "rstudio"
+}

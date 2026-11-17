@@ -1,0 +1,4 @@
+# --- 研究プロジェクトが足すシステムパッケージ（第4〜5層の余白）（DOCKER.md 2 節）---
+# libudunits2-dev   # 例: units（sf が使う）
+# libgdal-dev       # 例: sf
+# libmagick++-dev   # 例: magick
